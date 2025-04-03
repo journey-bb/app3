@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>말로 쓰는 일기</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        .day-selector {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .day-selector label {
+            cursor: pointer;
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            user-select: none;
+        }
+        .selected {
+            background-color: #4CAF50;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>말로 쓰는 일기</h1>
+
+    <label for="timePicker">녹음할 시간 설정:</label>
+    <input type="time" id="timePicker">
+    <button id="setTimeBtn">시간 설정</button>
+
+    <br><br>
+
+    <label>녹음할 요일 선택:</label>
+    <div class="day-selector">
+        <label><input type="checkbox" id="everyday" value="매일"> 매일</label>
+        <label><input type="checkbox" class="weekday" value="월"> 월</label>
+        <label><input type="checkbox" class="weekday" value="화"> 화</label>
+        <label><input type="checkbox" class="weekday" value="수"> 수</label>
+        <label><input type="checkbox" class="weekday" value="목"> 목</label>
+        <label><input type="checkbox" class="weekday" value="금"> 금</label>
+        <label><input type="checkbox" class="weekday" value="토"> 토</label>
+        <label><input type="checkbox" class="weekday" value="일"> 일</label>
+    </div>
+
+    <p id="status">🎙️ 대기 중...</p>
+    <p><strong>텍스트 변환 결과:</strong></p>
+    <p id="transcription"></p>
+
+    <button id="saveBtn">💾 저장하기</button>
+
+    <h2>📂 저장된 일기</h2>
+    <ul id="savedNotes"></ul>
+
+    <script>
+        let scheduledTime = localStorage.getItem("recordTime") || null;
+        let scheduledDays = JSON.parse(localStorage.getItem("recordDays")) || [];
+
+        document.getElementById("timePicker").value = scheduledTime || "";
+
+        // 🔹 요일 선택 이벤트 처리
+        document.querySelectorAll(".day-selector input").forEach(input => {
+            input.addEventListener("change", function() {
+                if (this.id === "everyday" && this.checked) {
+                    // "매일" 선택 시 다른 요일 해제
+                    document.querySelectorAll(".weekday").forEach(weekday => {
+                        weekday.checked = false;
+                    });
+                } else if (!this.checked && document.querySelectorAll(".weekday:checked").length === 0) {
+                    // 최소 하나의 요일은 선택되도록 함
+                    this.checked = true;
+                } else {
+                    // 개별 요일 선택 시 "매일" 해제
+                    document.getElementById("everyday").checked = false;
+                }
+            });
+        });
+
+        // 🔹 시간 설정 버튼 클릭 시 저장
+        document.getElementById("setTimeBtn").addEventListener("click", function() {
+            scheduledTime = document.getElementById("timePicker").value;
+            let selectedDays = [];
+            
+            if (document.getElementById("everyday").checked) {
+                selectedDays.push("매일");
+            } else {
+                document.querySelectorAll(".weekday:checked").forEach(checkbox => {
+                    selectedDays.push(checkbox.value);
+                });
+            }
+
+            if (scheduledTime && selectedDays.length > 0) {
+                localStorage.setItem("recordTime", scheduledTime);
+                localStorage.setItem("recordDays", JSON.stringify(selectedDays));
+                alert(`⏰ ${selectedDays.join(", ")} ${scheduledTime}에 녹음이 시작됩니다!`);
+            } else {
+                alert("⏳ 시간을 설정하고 요일을 선택해주세요!");
+            }
+        });
+    </script>
+</body>
+</html>
