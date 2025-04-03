@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>말로 쓰는 일기</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        .day-selector {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .day-selector label {
+            cursor: pointer;
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            user-select: none;
+        }
+        .selected {
+            background-color: #4CAF50;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>말로 쓰는 일기</h1>
+
+    <label for="timePicker">녹음할 시간 설정:</label>
+    <input type="time" id="timePicker">
+    <button id="setTimeBtn">시간 설정</button>
+
+    <br><br>
+
+    <label>녹음할 요일 선택:</label>
+    <div class="day-selector">
+        <label><input type="checkbox" id="everyday" value="매일"> 매일</label>
+        <label><input type="checkbox" class="weekday" value="월"> 월</label>
+        <label><input type="checkbox" class="weekday" value="화"> 화</label>
+        <label><input type="checkbox" class="weekday" value="수"> 수</label>
+        <label><input type="checkbox" class="weekday" value="목"> 목</label>
+        <label><input type="checkbox" class="weekday" value="금"> 금</label>
+        <label><input type="checkbox" class="weekday" value="토"> 토</label>
+        <label><input type="checkbox" class="weekday" value="일"> 일</label>
+    </div>
+
+    <p id="status">🎙️ 대기 중...</p>
+    <p><strong>텍스트 변환 결과:</strong></p>
+    <p id="transcription"></p>
+
+    <button id="saveBtn">💾 저장하기</button>
+
+    <h2>📂 저장된 일기</h2>
+    <ul id="savedNotes"></ul>
+
+    <script>
+        let scheduledTime = localStorage.getItem("recordTime") || null;
+        let scheduledDays = JSON.parse(localStorage.getItem("recordDays")) || [];
+        let recognition;
+
+        document.getElementById("timePicker").value = scheduledTime || "";
+
+        // 🔹 요일 선택 이벤트 처리
+        document.querySelectorAll(".day-selector input").forEach(input => {
+            input.addEventListener("change", function() {
+                if (this.id === "everyday" && this.checked) {
+                    document.querySelectorAll(".weekday").forEach(weekday => {
+                        weekday.checked = false;
+                    });
+                } else if (!this.checked && document.querySelectorAll(".weekday:checked").length === 0) {
+                    this.checked = true;
+                } else {
+                    document.getElementById("everyday").checked = false;
+                }
+            });
+        });
+
+        // 📌 **음성 인식 설정**
+        async function startRecognition() {
+            if (!recognition) {
+                recognition = new webkitSpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'ko-KR';
+
+                recognition.onstart = function() {
+                    document.getElementById("status").innerText = "🎤 녹음 중...";
+                };
+
+                recognition.onresult = function(event) {
+                    let transcript = event.results[0][0].transcript;
+                    document.getElementById("transcription").innerText = transcript;
+                    document.getElementById("status").innerText = "✅ 녹음 완료!";
+                    saveNote(transcript);
+                };
+
+                recognition.onerror = function(event) {
+                    document.getElementById("status").innerText = "❌ 오류 발생: " + event.error;
+                };
+
+                recognition.onend = function() {
+                    document.getElementById("status").innerText = "🎙️ 대기 중...";
+                };
+            }
+            recognition.start();
+        }
+
+        // 📌 **마이크 권한 요청**
+        async function requestMicrophoneAccess() {
+            try {
+                await navigator.mediaDevices.getUserMedia({ audio: true });
+                console.log("✅ 마이크 권한이 허용되었습니다!");
+            } catch (error) {
+                console.error("🚫 마이크 권한 요청 실패:", error);
+                alert("마이크 권한을 허용해야 음성 녹음이 가능합니다.");
+            }
+        }
+
+        // 📌 **시간 설정 버튼 클릭 시 저장**
+        document.getElementById("setTimeBtn").addEventListener("click", function() {
+            scheduledTime = document.getElementById("timePicker").value;
+            let selectedDays = [];
+            
+            if (document.getElementById("everyday").checked) {
+                selectedDays.push("매일");
+            } else {
+                document.querySelectorAll(".weekday:checked").forEach(checkbox => {
+                    selectedDays.push(checkbox.value);
+                });
+            }
+
+            if (scheduledTime && selectedDays.length > 0) {
+                localStorage.setItem("recordTime", scheduledTime);
+                localStorage.setItem("recordDays", JSON.stringify(selectedDays));
+                alert(`⏰ ${selectedDays.join(", ")} ${scheduledTime}에 녹음이 시작됩니다!`);
+                checkTime();
+            } else {
+                alert("⏳ 시간을 설정하고 요일을 선택해주세요!");
+            }
+        });
+
+        // 📌 **시간 체크 후 자동 녹음 (모바일 강제 실행)**
+        function checkTime() {
+            setInterval(async function() {
+                let now = new Date();
+                let currentTime = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
+                let currentDay = ["일", "월", "화", "수", "목", "금", "토"][now.getDay()];
+
+                let selectedDays = JSON.parse(localStorage.getItem("recordDays")) || [];
+                let selectedTime = localStorage.getItem("recordTime");
+
+                if (selectedTime === currentTime && (selectedDays.includes(currentDay) || selectedDays.includes("매일"))) {
+                    console.log("🎤 자동 녹음 시작!");
+                    await requestMicrophoneAccess();
+                    startRecognition();
+                }
+            }, 1000); // 1초마다 체크
+        }
+
+        // 📌 **메모 저장하기**
+        function saveNote(text) {
+            let notes = JSON.parse(localStorage.getItem("notes")) || [];
+            notes.push(text);
+            localStorage.setItem("notes", JSON.stringify(notes));
+            loadNotes();
+        }
+
+        // 📌 **저장된 메모 불러오기**
+        function loadNotes() {
+            let notes = JSON.parse(localStorage.getItem("notes")) || [];
+            let savedNotesList = document.getElementById("savedNotes");
+            savedNotesList.innerHTML = "";
+            notes.forEach(note => {
+                let li = document.createElement("li");
+                li.textContent = note;
+                savedNotesList.appendChild(li);
+            });
+        }
+
+        // 📌 **"저장하기" 버튼 클릭 시 수동 저장**
+        document.getElementById("saveBtn").addEventListener("click", function() {
+            let text = document.getElementById("transcription").innerText;
+            if (text) {
+                saveNote(text);
+                alert("✅ 메모가 저장되었습니다!");
+            } else {
+                alert("⚠️ 저장할 내용이 없습니다.");
+            }
+        });
+
+        // 📌 **페이지 로드 시 저장된 메모 불러오기**
+        loadNotes();
+        checkTime();
+
+    </script>
+</body>
+</html>
